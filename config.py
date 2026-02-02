@@ -1,27 +1,32 @@
 #!/usr/bin/env python3
 """
-CONFIG.PY - Configuración del sistema
+config.py - Configuración centralizada
 """
 
-# ========== CONFIGURACIÓN API ==========
+import os
+from pathlib import Path
+import glob
+
 API_KEY = "sk-1fd02fbdb4e340ae9203c9a7258acaa6"
 BASE_URL = "https://api.deepseek.com"
+MODEL = "deepseek-chat"
+MAX_RESPONSE_TOKENS = 4000
+TEMPERATURE = 0.1
 
-# ========== RUTAS PARA COMUNICADOS SECIHTI ==========
-import glob
-import os
+PDF_BASE_PATH = "/home/roger/Downloads/Comunicados Secihti"
 
-CARPETA_SECIHTI = "/home/roger/Downloads/Comunicados Secihti"
+def get_pdf_files():
+    pdf_files = glob.glob(os.path.join(PDF_BASE_PATH, "*.pdf"))
+    return sorted([Path(f) for f in pdf_files])
 
-# Obtener todos los PDFs
-ARCHIVOS_SECIHTI = glob.glob(os.path.join(CARPETA_SECIHTI, "*.pdf"))
+PDF_FILES = get_pdf_files()
 
-# Para compatibilidad con scripts anteriores
-ARCHIVOS_ENTRADA = ARCHIVOS_SECIHTI
+ARCHIVOS_SECIHTI = PDF_FILES
+ARCHIVOS_ENTRADA = PDF_FILES
 SOLO_SECIHTI = True
 
-# ========== CONFIGURACIÓN OPCIONAL ==========
-# (Las variables que usaban tus scripts originales)
-MAX_TOKENS_RESPUESTA = 4000
-TEMPERATURA = 0.1
-MODELO = "deepseek-chat"
+PDF_MAX_PAGES = 3
+PDF_TEXT_LIMIT = 5000
+TOKENS_PER_CHUNK = 26000
+
+print(f"PDFs encontrados: {len(PDF_FILES)}")

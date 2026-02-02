@@ -1,8 +1,5 @@
 """
-CONSULTOR SECIHTI v32 - SISTEMA DE ANÁLISIS INTELIGENTE
-
-Sistema para responder preguntas en español natural con razonamiento contextual,
-analizando documentos oficiales y proporcionando respuestas verificadas.
+CONSULTOR SECIHTI v32 - ANÁLISIS INTELIGENTE
 """
 
 import sys
@@ -11,13 +8,7 @@ import os
 import re
 from pathlib import Path
 from datetime import datetime
-from typing import List, Dict, Any, Optional
-import hashlib
 import glob
-
-# =============================================================================
-# CONFIGURACIÓN DEEPSEEK
-# =============================================================================
 
 DEEPSEEK_CONFIG = {
     "api_key": "sk-1fd02fbdb4e340ae9203c9a7258acaa6",
@@ -27,88 +18,31 @@ DEEPSEEK_CONFIG = {
     "max_response_tokens": 4000,
 }
 
-# =============================================================================
-# CLASE ANALIZADORCONSULTA
-# =============================================================================
-
 class AnalizadorConsulta:
-    """
-    Analiza consultas en español natural para determinar tipo y parámetros.
-    
-    Methods
-    -------
-    analizar(consulta_texto)
-        Analiza texto de consulta y retorna estructura con tipo y parámetros.
-    _determinar_accion(tipo)
-        Mapea tipo de consulta a acción específica.
-    
-    Attributes
-    ----------
-    patrones : List[Tuple]
-        Patrones regex para detectar tipos de consulta.
-    
-    Notes
-    -----
-    Los patrones están ordenados por especificidad (más específicos primero).
-    """
-    
     @staticmethod
-    def analizar(consulta_texto: str) -> Dict[str, Any]:
-        """
-        Analiza una consulta en español natural.
-        
-        Parameters
-        ----------
-        consulta_texto : str
-            Texto de la consulta del usuario.
-        
-        Returns
-        -------
-        Dict[str, Any]
-            Diccionario con:
-            - tipo: Categoría de la consulta
-            - parametros: Parámetros extraídos
-            - consulta_original: Texto original
-            - accion: Acción a realizar
-        
-        Examples
-        --------
-        >>> AnalizadorConsulta.analizar("De qué trata el proyecto Olinia?")
-        {'tipo': 'info_proyecto', 'parametros': {'proyecto': 'Olinia'}, ...}
-        
-        >>> AnalizadorConsulta.analizar("Es verdad que Kutsari trata sobre petróleo?")
-        {'tipo': 'verificar', 'parametros': {'afirmacion': 'Kutsari trata sobre petróleo'}, ...}
-        """
+    def analizar(consulta_texto):
         consulta = consulta_texto.lower().strip()
         
-        # Patrones de detección ordenados por especificidad
         patrones = [
-            # Info de proyecto específico
             (r'(?:de\s+qu[ée]\s+trata|qu[ée]\s+es|en\s+qu[ée]\s+consiste)\s+(?:el\s+)?(proyecto)?\s*(?:["\'])?([^"\'\?]+)(?:["\'])?\s*\??', 
              'info_proyecto', lambda m: {"proyecto": m.group(2).strip()}),
             
-            # Verificación de afirmaciones
             (r'(?:es\s+(?:verdad|mentira|cierto|falso)|verdad\s+o\s+mentira)[\s:,]*(.+)', 
              'verificar', lambda m: {"afirmacion": m.group(1).strip()}),
             
-            # Búsqueda en documentos
             (r'(?:en\s+qu[ée]\s+documentos|d[óo]nde\s+aparece)[\s:,]+(.+)', 
              'buscar_documentos', lambda m: {"busqueda": m.group(1).strip()}),
             
-            # Extracción de listas
             (r'^(?:dame|muestra|lista|extrae)\s+(?:los\s+)?(proyectos|personas|instituciones)', 
              'lista_simple', lambda m: {"tipo": m.group(1)}),
             
-            # Consultas directas
             (r'^proyectos$', 'proyectos', lambda m: {}),
             (r'^personas$', 'personas', lambda m: {}),
             (r'^instituciones$', 'instituciones', lambda m: {}),
             
-            # Preguntas generales
             (r'(.+\?)', 'pregunta_general', lambda m: {"pregunta": m.group(1)}),
         ]
         
-        # Probar cada patrón
         for patron, tipo, extractor in patrones:
             match = re.match(patron, consulta, re.IGNORECASE)
             if match:
@@ -119,7 +53,6 @@ class AnalizadorConsulta:
                     "accion": AnalizadorConsulta._determinar_accion(tipo)
                 }
         
-        # Por defecto: búsqueda general
         return {
             "tipo": "busqueda_general",
             "parametros": {"texto": consulta_texto},
@@ -128,20 +61,7 @@ class AnalizadorConsulta:
         }
     
     @staticmethod
-    def _determinar_accion(tipo: str) -> str:
-        """
-        Mapea tipo de consulta a acción específica.
-        
-        Parameters
-        ----------
-        tipo : str
-            Tipo de consulta detectado.
-        
-        Returns
-        -------
-        str
-            Acción correspondiente al tipo.
-        """
+    def _determinar_accion(tipo):
         acciones = {
             'info_proyecto': 'obtener_info_proyecto',
             'verificar': 'verificar_afirmacion',
@@ -155,30 +75,10 @@ class AnalizadorConsulta:
         }
         return acciones.get(tipo, 'buscar_informacion')
 
-# =============================================================================
-# CLASE GESTORPROMPTS
-# =============================================================================
-
 class GestorPrompts:
-    """
-    Administra prompts especializados para cada tipo de consulta.
-    
-    Attributes
-    ----------
-    PROMPTS : Dict[str, Dict]
-        Diccionario de prompts organizados por tipo de consulta.
-    
-    Methods
-    -------
-    obtener_prompt(tipo_consulta, parametros)
-        Retorna prompt personalizado con parámetros insertados.
-    """
-    
     PROMPTS = {
         'info_proyecto': {
-            'system': """Eres un experto en proyectos de investigación mexicano.
-            Analiza documentos oficiales y extrae información precisa.
-            Responde en español con claridad.""",
+            'system': "Eres un experto en proyectos de investigación mexicano. Analiza documentos oficiales y extrae información precisa. Responde en español con claridad.",
             
             'user': """Analiza los documentos e informa sobre este proyecto:
 
@@ -218,8 +118,7 @@ RESPONDA en formato JSON:
         },
         
         'verificar': {
-            'system': """Eres un verificador de hechos basado en documentos.
-            Determina la veracidad usando solo evidencia documental.""",
+            'system': "Eres un verificador de hechos basado en documentos. Determina la veracidad usando solo evidencia documental.",
             
             'user': """Verifica esta afirmación:
 
@@ -258,7 +157,7 @@ RESPONDA en formato JSON:
         },
         
         'buscar_documentos': {
-            'system': """Eres un buscador experto en documentos oficiales.""",
+            'system': "Eres un buscador experto en documentos oficiales.",
             
             'user': """Encuentra esta información:
 
@@ -296,93 +195,28 @@ RESPONDA en formato JSON:
     }
     
     @classmethod
-    def obtener_prompt(cls, tipo_consulta: str, parametros: Dict) -> Dict:
-        """
-        Obtiene prompt personalizado para tipo de consulta.
-        
-        Parameters
-        ----------
-        tipo_consulta : str
-            Tipo de consulta detectado.
-        parametros : Dict
-            Parámetros extraídos de la consulta.
-        
-        Returns
-        -------
-        Dict
-            Diccionario con 'system' y 'user' prompts.
-        
-        Notes
-        -----
-        Reemplaza placeholders {param} en el prompt con valores reales.
-        Si no encuentra el tipo, usa prompt genérico.
-        """
+    def obtener_prompt(cls, tipo_consulta, parametros):
         if tipo_consulta in cls.PROMPTS:
             prompt_data = cls.PROMPTS[tipo_consulta].copy()
             user_prompt = prompt_data['user']
             
-            # Reemplazar parámetros en el prompt
             for key, value in parametros.items():
                 user_prompt = user_prompt.replace(f"{{{key}}}", str(value))
             
             prompt_data['user'] = user_prompt
             return prompt_data
         
-        # Prompt genérico para consultas no especificadas
         return {
             'system': "Analiza documentos y responde preguntas.",
             'user': f"Responde a: {parametros.get('texto', '')}\n\nDocumentos:\n{{documentos}}"
         }
 
-# =============================================================================
-# CLASE PRINCIPAL - CONSULTORSECIHTIV32
-# =============================================================================
-
 class ConsultorSecihtiV32:
-    """
-    Sistema principal para consultas avanzadas en español natural.
-    
-    Attributes
-    ----------
-    cache_dir : Path
-        Directorio para cache de resultados.
-    
-    Methods
-    -------
-    procesar_consulta(consulta_texto, max_documentos=None)
-        Procesa consulta completa desde análisis hasta respuesta.
-    extraer_texto_pdf(ruta_pdf, max_paginas=3)
-        Extrae texto de PDF de forma eficiente.
-    consultar_deepseek(prompt, system_message=None)
-        Consulta a API de DeepSeek con cliente OpenAI.
-    """
-    
     def __init__(self):
-        """Inicializa consultor con directorio de cache."""
         self.cache_dir = Path("cache_v32")
         self.cache_dir.mkdir(exist_ok=True)
     
-    def extraer_texto_pdf(self, ruta_pdf: str, max_paginas: int = 3) -> str:
-        """
-        Extrae texto de las primeras páginas de un PDF.
-        
-        Parameters
-        ----------
-        ruta_pdf : str
-            Ruta al archivo PDF.
-        max_paginas : int, optional
-            Máximo de páginas a procesar (por defecto 3).
-        
-        Returns
-        -------
-        str
-            Texto extraído, limitado a 5000 caracteres.
-        
-        Notes
-        -----
-        Extrae solo primeras páginas ya que contienen información principal.
-        Limitado a 5000 caracteres por eficiencia en procesamiento.
-        """
+    def extraer_texto_pdf(self, ruta_pdf, max_paginas=3):
         try:
             import pdfplumber
             
@@ -393,37 +227,13 @@ class ConsultorSecihtiV32:
                     if texto_pag:
                         texto += texto_pag + "\n\n"
             
-            return texto[:5000]  # Limitar para eficiencia
+            return texto[:5000]
             
         except Exception as e:
             print(f"Error en {Path(ruta_pdf).name[:30]}: {str(e)[:50]}")
             return ""
     
-    def consultar_deepseek(self, prompt: str, system_message: str = None) -> str:
-        """
-        Consulta a DeepSeek API usando cliente OpenAI compatible.
-        
-        Parameters
-        ----------
-        prompt : str
-            Prompt del usuario.
-        system_message : str, optional
-            Mensaje del sistema para contexto.
-        
-        Returns
-        -------
-        str
-            Respuesta de la API o mensaje de error.
-        
-        Raises
-        ------
-        ImportError
-            Si no está instalado el paquete openai.
-        
-        Notes
-        -----
-        Usa temperatura baja (0.1) para respuestas más determinísticas.
-        """
+    def consultar_deepseek(self, prompt, system_message=None):
         try:
             from openai import OpenAI
             
@@ -449,39 +259,13 @@ class ConsultorSecihtiV32:
         except Exception as e:
             return f"ERROR: {str(e)[:100]}"
     
-    def procesar_consulta(self, consulta_texto: str, max_documentos: int = None) -> Dict:
-        """
-        Procesa consulta completa: análisis, extracción, consulta y respuesta.
-        
-        Parameters
-        ----------
-        consulta_texto : str
-            Consulta del usuario en español natural.
-        max_documentos : int, optional
-            Límite de documentos para pruebas.
-        
-        Returns
-        -------
-        Dict
-            Resultado estructurado de la consulta.
-        
-        Workflow
-        --------
-        1. Analizar consulta para determinar tipo y parámetros
-        2. Cargar y extraer texto de documentos
-        3. Preparar prompt específico para el tipo de consulta
-        4. Consultar a DeepSeek API
-        5. Procesar y formatear respuesta
-        6. Guardar resultados
-        """
-        # Paso 1: Analizar consulta
+    def procesar_consulta(self, consulta_texto, max_documentos=None):
         print(f"\nCONSULTA: {consulta_texto}")
         print("=" * 60)
         
         analisis = AnalizadorConsulta.analizar(consulta_texto)
         print(f"Tipo detectado: {analisis['tipo']}")
         
-        # Paso 2: Cargar documentos
         pdf_paths = self._cargar_documentos(max_documentos)
         
         if not pdf_paths:
@@ -489,13 +273,11 @@ class ConsultorSecihtiV32:
         
         print(f"Documentos a procesar: {len(pdf_paths)}")
         
-        # Paso 3: Extraer textos
         textos_documentos = self._extraer_textos_documentos(pdf_paths)
         
         if not textos_documentos:
             return {"error": "No se pudo extraer texto de los documentos"}
         
-        # Paso 4: Preparar prompt
         prompt_data = GestorPrompts.obtener_prompt(
             analisis['tipo'], 
             analisis['parametros']
@@ -508,40 +290,19 @@ class ConsultorSecihtiV32:
         
         prompt_final = prompt_data['user'].replace("{documentos}", textos_combinados)
         
-        # Paso 5: Consultar a DeepSeek
         print("Consultando a DeepSeek...")
         respuesta = self.consultar_deepseek(prompt_final, prompt_data['system'])
         
-        # Paso 6: Procesar respuesta
         resultado = self._procesar_respuesta(respuesta, analisis)
         self._guardar_resultado(consulta_texto, resultado)
         self._mostrar_resultado(resultado, analisis['tipo'])
         
         return resultado
     
-    def _cargar_documentos(self, max_docs: int = None) -> List[str]:
-        """
-        Carga rutas de documentos PDF desde directorio predeterminado.
-        
-        Parameters
-        ----------
-        max_docs : int, optional
-            Límite de documentos a cargar.
-        
-        Returns
-        -------
-        List[str]
-            Lista de rutas a archivos PDF.
-        
-        Notes
-        -----
-        Ruta predeterminada: /home/roger/Downloads/Comunicados Secihti/
-        Ordena por nombre descendente para priorizar documentos recientes.
-        """
+    def _cargar_documentos(self, max_docs=None):
         pdf_paths = glob.glob("/home/roger/Downloads/Comunicados Secihti/*.pdf")
         
         if max_docs and max_docs < len(pdf_paths):
-            # Priorizar documentos más recientes (orden alfabético inverso)
             pdf_paths = sorted(
                 pdf_paths,
                 key=lambda x: Path(x).name,
@@ -550,25 +311,7 @@ class ConsultorSecihtiV32:
         
         return pdf_paths
     
-    def _extraer_textos_documentos(self, pdf_paths: List[str]) -> List[tuple]:
-        """
-        Extrae texto de todos los documentos PDF.
-        
-        Parameters
-        ----------
-        pdf_paths : List[str]
-            Rutas a archivos PDF.
-        
-        Returns
-        -------
-        List[tuple]
-            Lista de tuplas (nombre_documento, texto_extraído).
-        
-        Notes
-        -----
-        Muestra progreso durante la extracción.
-        Solo incluye documentos con más de 200 caracteres de texto.
-        """
+    def _extraer_textos_documentos(self, pdf_paths):
         textos = []
         
         for i, ruta in enumerate(pdf_paths, 1):
@@ -585,58 +328,18 @@ class ConsultorSecihtiV32:
         
         return textos
     
-    def _formatear_textos_documentos(self, textos: List[tuple], rutas: List[str]) -> str:
-        """
-        Formatea textos para inclusión en prompt.
-        
-        Parameters
-        ----------
-        textos : List[tuple]
-            Lista de (nombre, texto) de documentos.
-        rutas : List[str]
-            Rutas originales (no usadas, mantenido por compatibilidad).
-        
-        Returns
-        -------
-        str
-            Texto formateado con encabezados de documentos.
-        
-        Notes
-        -----
-        Limita cada documento a 2000 caracteres para mantener prompt manejable.
-        """
+    def _formatear_textos_documentos(self, textos, rutas):
         resultado = []
         
         for nombre, texto in textos:
             resultado.append(f"--- DOCUMENTO: {nombre} ---")
-            resultado.append(texto[:2000])  # Limitar tamaño
-            resultado.append("")  # Línea en blanco
+            resultado.append(texto[:2000])
+            resultado.append("")
         
         return "\n".join(resultado)
     
-    def _procesar_respuesta(self, respuesta: str, analisis: Dict) -> Dict:
-        """
-        Procesa respuesta de DeepSeek extrayendo JSON si está presente.
-        
-        Parameters
-        ----------
-        respuesta : str
-            Respuesta completa de la API.
-        analisis : Dict
-            Análisis original de la consulta.
-        
-        Returns
-        -------
-        Dict
-            Respuesta procesada con metadatos.
-        
-        Notes
-        -----
-        Intenta extraer JSON de la respuesta usando regex.
-        Si no encuentra JSON, incluye respuesta como texto.
-        """
+    def _procesar_respuesta(self, respuesta, analisis):
         try:
-            # Buscar JSON en la respuesta
             json_match = re.search(r'\{.*\}', respuesta, re.DOTALL)
             if json_match:
                 json_str = json_match.group()
@@ -646,9 +349,8 @@ class ConsultorSecihtiV32:
                 data["timestamp"] = datetime.now().isoformat()
                 return data
         except:
-            pass  # Si falla, continuar con respuesta textual
+            pass
         
-        # Fallback: respuesta no JSON
         return {
             "consulta": analisis["consulta_original"],
             "tipo_consulta": analisis["tipo"],
@@ -657,22 +359,7 @@ class ConsultorSecihtiV32:
             "advertencia": "Respuesta no está en formato JSON estructurado"
         }
     
-    def _guardar_resultado(self, consulta: str, resultado: Dict) -> None:
-        """
-        Guarda resultado en archivo JSON con timestamp.
-        
-        Parameters
-        ----------
-        consulta : str
-            Consulta original del usuario.
-        resultado : Dict
-            Resultado procesado.
-        
-        Notes
-        -----
-        Nombre de archivo incluye timestamp para unicidad.
-        Formato: resultados_v32_YYYYMMDD_HHMMSS.json
-        """
+    def _guardar_resultado(self, consulta, resultado):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         archivo = f"resultados_v32_{timestamp}.json"
         
@@ -683,19 +370,9 @@ class ConsultorSecihtiV32:
                 "resultado": resultado
             }, f, ensure_ascii=False, indent=2)
         
-        print(f"\nResultado guardado en: {archivo}")
+        print(f"Resultado guardado en: {archivo}")
     
-    def _mostrar_resultado(self, resultado: Dict, tipo_consulta: str) -> None:
-        """
-        Muestra resultado de forma legible según tipo de consulta.
-        
-        Parameters
-        ----------
-        resultado : Dict
-            Resultado a mostrar.
-        tipo_consulta : str
-            Tipo de consulta para formateo específico.
-        """
+    def _mostrar_resultado(self, resultado, tipo_consulta):
         print(f"\n{'='*60}")
         print(f"RESULTADO - Tipo: {tipo_consulta}")
         print(f"{'='*60}")
@@ -704,7 +381,6 @@ class ConsultorSecihtiV32:
             print(f"Error: {resultado['error']}")
             return
         
-        # Mostrar según tipo de consulta
         if tipo_consulta == "info_proyecto":
             self._mostrar_info_proyecto(resultado)
         elif tipo_consulta == "verificar":
@@ -712,11 +388,9 @@ class ConsultorSecihtiV32:
         elif tipo_consulta == "buscar_documentos":
             self._mostrar_busqueda(resultado)
         else:
-            # Mostrar genérico
             print(json.dumps(resultado, ensure_ascii=False, indent=2))
     
-    def _mostrar_info_proyecto(self, resultado: Dict) -> None:
-        """Muestra información de proyecto de forma legible."""
+    def _mostrar_info_proyecto(self, resultado):
         if "proyecto" in resultado:
             print(f"\nPROYECTO: {resultado['proyecto']}")
         
@@ -731,8 +405,7 @@ class ConsultorSecihtiV32:
                 if isinstance(datos, dict) and "texto" in datos:
                     print(f"\n  {categoria.upper()}: {datos['texto'][:150]}...")
     
-    def _mostrar_verificacion(self, resultado: Dict) -> None:
-        """Muestra resultado de verificación."""
+    def _mostrar_verificacion(self, resultado):
         if "afirmacion" in resultado:
             print(f"\nAFIRMACIÓN: {resultado['afirmacion']}")
         
@@ -743,8 +416,7 @@ class ConsultorSecihtiV32:
         if "explicacion_detallada" in resultado:
             print(f"\nEXPLICACIÓN: {resultado['explicacion_detallada'][:300]}...")
     
-    def _mostrar_busqueda(self, resultado: Dict) -> None:
-        """Muestra resultados de búsqueda."""
+    def _mostrar_busqueda(self, resultado):
         if "busqueda" in resultado:
             print(f"\nBÚSQUEDA: {resultado['busqueda']}")
         
@@ -761,49 +433,36 @@ class ConsultorSecihtiV32:
             else:
                 print(f"\nNO SE ENCONTRÓ INFORMACIÓN")
 
-# =============================================================================
-# FUNCIONES DE INTERFAZ
-# =============================================================================
-
-def mostrar_ayuda() -> None:
-    """
-    Muestra mensaje de ayuda con ejemplos de uso.
-    
-    Notes
-    -----
-    Incluye ejemplos reales de consultas que el sistema puede procesar.
-    """
+def mostrar_ayuda():
     print("""
 CONSULTOR SECIHTI v32 - PREGUNTAS EN ESPAÑOL NATURAL
 
 USO:
-  python consultorsecihty32.py "tu consulta"
+  python consultorsecihtyanalisis.py "tu consulta"
 
 EJEMPLOS:
 
 SOBRE PROYECTOS:
-  python consultorsecihty32.py "De qué trata el proyecto Olinia?"
-  python consultorsecihty32.py "Qué es el proyecto Kutsari?"
+  python consultorsecihtyanalisis.py "De qué trata el proyecto Olinia?"
+  python consultorsecihtyanalisis.py "Qué es el proyecto Kutsari?"
 
 VERIFICACIONES:
-  python consultorsecihty32.py "Es verdad que Kutsari trata sobre petróleo?"
+  python consultorsecihtyanalisis.py "Es verdad que Kutsari trata sobre petróleo?"
 
 BÚSQUEDAS:
-  python consultorsecihty32.py "En qué documentos aparece el IPN?"
+  python consultorsecihtyanalisis.py "En qué documentos aparece el IPN?"
 
 EXTRACCIONES:
-  python consultorsecihty32.py "Dame los proyectos"
-  python consultorsecihty32.py "proyectos"
+  python consultorsecihtyanalisis.py "Dame los proyectos"
+  python consultorsecihtyanalisis.py "proyectos"
 
 OPCIONES:
-  python consultorsecihty32.py --probar 5    # Probar con 5 documentos
-  python consultorsecihty32.py --limpiar     # Limpiar cache
-  python consultorsecihty32.py --ayuda       # Mostrar esta ayuda
+  python consultorsecihtyanalisis.py --probar 5    # Probar con 5 documentos
+  python consultorsecihtyanalisis.py --limpiar     # Limpiar cache
+  python consultorsecihtyanalisis.py --ayuda       # Mostrar esta ayuda
 """)
 
-
-def limpiar_cache() -> None:
-    """Elimina directorio de cache si existe."""
+def limpiar_cache():
     import shutil
     cache_dir = Path("cache_v32")
     
@@ -813,29 +472,11 @@ def limpiar_cache() -> None:
     else:
         print("No hay cache para limpiar")
 
-
-def main() -> None:
-    """
-    Función principal de línea de comandos.
-    
-    Workflow
-    --------
-    1. Verificar argumentos
-    2. Procesar comandos especiales
-    3. Crear consultor y procesar consulta
-    4. Manejar errores
-    
-    Raises
-    ------
-    SystemExit
-        Si hay errores fatales o dependencias faltantes.
-    """
-    # Verificar argumentos mínimos
+def main():
     if len(sys.argv) < 2:
         mostrar_ayuda()
         return
     
-    # Comandos especiales
     if sys.argv[1] == "--ayuda" or sys.argv[1] == "-h":
         mostrar_ayuda()
         return
@@ -843,7 +484,6 @@ def main() -> None:
         limpiar_cache()
         return
     elif sys.argv[1] == "--test":
-        # Modo prueba de detección de consultas
         pruebas = [
             "De qué trata el proyecto Olinia?",
             "En qué documentos aparece el IPN?",
@@ -856,15 +496,13 @@ def main() -> None:
         for prueba in pruebas:
             analisis = AnalizadorConsulta.analizar(prueba)
             print(f"\nConsulta: '{prueba}'")
-            print(f"  → Tipo: {analisis['tipo']}")
-            print(f"  → Parámetros: {analisis['parametros']}")
+            print(f"Tipo: {analisis['tipo']}")
+            print(f"Parámetros: {analisis['parametros']}")
         
         return
     
-    # Unir argumentos como consulta
     consulta_texto = " ".join(sys.argv[1:])
     
-    # Verificar modo prueba
     max_docs = None
     if "--probar" in sys.argv:
         for arg in sys.argv:
@@ -874,13 +512,11 @@ def main() -> None:
         max_docs = max_docs or 5
         print(f"MODO PRUEBA: {max_docs} documentos")
     
-    # Crear y ejecutar consultor
     consultor = ConsultorSecihtiV32()
     
     try:
         resultado = consultor.procesar_consulta(consulta_texto, max_docs)
         
-        # Mostrar finalización
         print(f"\n{'='*60}")
         print("CONSULTA COMPLETADA")
         print(f"{'='*60}")
@@ -892,22 +528,7 @@ def main() -> None:
         print("   2. Asegúrate de tener conexión a internet")
         print("   3. Prueba con menos documentos: --probar 3")
 
-
-def verificar_dependencias() -> bool:
-    """
-    Verifica que las dependencias requeridas estén instaladas.
-    
-    Returns
-    -------
-    bool
-        True si todas las dependencias están instaladas, False en caso contrario.
-    
-    Notes
-    -----
-    Dependencias críticas:
-    - pdfplumber: Para extracción de texto de PDF
-    - openai: Cliente para API de DeepSeek
-    """
+def verificar_dependencias():
     dependencias = [
         ("pdfplumber", "pip install pdfplumber"),
         ("openai", "pip install openai"),
@@ -924,32 +545,16 @@ def verificar_dependencias() -> bool:
     if faltantes:
         print("DEPENDENCIAS FALTANTES:")
         for modulo, comando in faltantes:
-            print(f"   - {modulo}: {comando}")
+            print(f"{modulo}: {comando}")
         print("\nEjecuta los comandos de instalación arriba.")
         return False
     
     return True
 
-# =============================================================================
-# PUNTO DE ENTRADA
-# =============================================================================
-
 if __name__ == "__main__":
-    """
-    Punto de entrada principal del script.
-    
-    Workflow
-    --------
-    1. Mostrar banner de inicio
-    2. Verificar dependencias
-    3. Ejecutar función principal
-    4. Salir con código apropiado
-    """
     print("CONSULTOR SECIHTI v32 - INICIANDO...")
     
-    # Verificar dependencias críticas
     if not verificar_dependencias():
         sys.exit(1)
     
-    # Ejecutar función principal
     main()
